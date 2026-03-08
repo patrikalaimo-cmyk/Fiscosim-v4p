@@ -1,0 +1,41 @@
+body{
+ margin:0;
+ font-family:sans-serif;
+ background:#0e1118;
+ color:#e4eaf5;
+}
+
+.app{
+ display:flex;
+ height:100vh;
+}
+
+.sidebar{
+ width:220px;
+ background:#141b26;
+ padding:20px;
+ display:flex;
+ flex-direction:column;
+}
+
+.sidebar button{
+ margin:5px 0;
+ padding:10px;
+ background:none;
+ border:1px solid #252e42;
+ color:white;
+ cursor:pointer;
+}
+
+.main{
+ flex:1;
+ padding:30px;
+}
+
+.login{
+ display:flex;
+ flex-direction:column;
+ gap:10px;
+ width:300px;
+ margin:100px auto;
+}
