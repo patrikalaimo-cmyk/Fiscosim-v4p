@@ -1985,10 +1985,31 @@ function ModuloUtenti(){
   const [modal,setModal]=useState(null);
   const [saving,setSaving]=useState(false);
   const [err,setErr]=useState(null);
-  const EMPTY={nome:"",cognome:"",email:"",ruolo:"collaboratore"};
+  const EMPTY={nome:"",cognome:"",email:"",ruolo:"collaboratore",password_hash:""};
   const carica=useCallback(async()=>{setLoading(true);const{data}=await sb.from("utenti_studio").select("*").eq("attivo",true).order("nome");setUtenti(data||[]);setLoading(false);},[]);
   useEffect(()=>{carica();},[carica]);
-  const salva=async(data)=>{setSaving(true);setErr(null);try{if(modal.mode==="new"){const{error}=await sb.from("utenti_studio").insert([data]);if(error)throw error;}else{const{error}=await sb.from("utenti_studio").update(data).eq("id",modal.data.id);if(error)throw error;}await carica();setModal(null);}catch(e){setErr(e.message);}finally{setSaving(false);}};
+  const salva=async(data)=>{
+    setSaving(true);setErr(null);
+    try{
+      // Per nuovo utente, password è obbligatoria
+      if(modal.mode==="new"&&!data.password_hash){throw new Error("La password è obbligatoria per i nuovi utenti");}
+      // Per modifica, se password vuota non la aggiorniamo
+      const saveData={...data};
+      if(modal.mode==="edit"&&!saveData.password_hash){
+        delete saveData.password_hash;
+      }
+      if(modal.mode==="new"){
+        const{error}=await sb.from("utenti_studio").insert([saveData]);
+        if(error)throw error;
+      }else{
+        const{error}=await sb.from("utenti_studio").update(saveData).eq("id",modal.data.id);
+        if(error)throw error;
+      }
+      await carica();
+      setModal(null);
+    }catch(e){setErr(e.message);}
+    finally{setSaving(false);}
+  };
   const elimina=async(id)=>{if(!confirm("Eliminare questo utente?"))return;await sb.from("utenti_studio").update({attivo:false}).eq("id",id);carica();};
   return(
     <div className="page">
@@ -2075,6 +2096,11 @@ function UtenteModal({mode,data,onSave,onClose,saving,err}){
             <div className="fg"><label>Nome *</label><input value={f.nome} onChange={e=>up("nome",e.target.value)}/></div>
             <div className="fg"><label>Cognome</label><input value={f.cognome||""} onChange={e=>up("cognome",e.target.value)}/></div>
             <div className="fg full"><label>Email *</label><input type="email" value={f.email} onChange={e=>up("email",e.target.value)}/></div>
+            <div className="fg full">
+              <label>{mode==="new"?"Password *":"Nuova Password (lascia vuoto per non modificare)"}</label>
+              <input type="password" value={f.password_hash||""} onChange={e=>up("password_hash",e.target.value)} placeholder={mode==="new"?"Inserisci password":"••••••••"}/>
+              <div className="hint">La password deve essere comunicata all'utente in modo sicuro</div>
+            </div>
             <div className="fg full">
               <label>Ruolo</label>
               <select value={f.ruolo} onChange={e=>up("ruolo",e.target.value)}>
@@ -4831,45 +4857,53 @@ function isSoloAssegnati(perm, modulo) { return perm?.[modulo]?.solo_assegnati =
 
 // ── LOGIN ────────────────────────────────────────────────────
 function Login({onLogin}){
-  const [utenti,setUtenti]=useState([]);
-  const [loading,setLoading]=useState(true);
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [loading,setLoading]=useState(false);
   const [err,setErr]=useState(null);
-  useEffect(()=>{
-    sb.from("utenti_studio").select("id,nome,cognome,email,ruolo").eq("attivo",true).order("nome")
-      .then(({data})=>{ setUtenti(data||[]); setLoading(false); });
-  },[]);
-  if(loading)return<div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",color:"var(--mu)"}}>⏳ Caricamento...</div>;
+  
+  const handleLogin=async(e)=>{
+    e.preventDefault();
+    if(!email||!password){setErr("Inserisci email e password");return;}
+    setLoading(true);setErr(null);
+    try{
+      const{data,error}=await sb.from("utenti_studio")
+        .select("id,nome,cognome,email,ruolo,permessi,clienti_assegnati,password_hash")
+        .eq("email",email.toLowerCase().trim())
+        .eq("attivo",true)
+        .single();
+      if(error||!data){setErr("Utente non trovato");setLoading(false);return;}
+      if(data.password_hash!==password){setErr("Password non corretta");setLoading(false);return;}
+      // Login ok - rimuovi password_hash prima di salvare in stato
+      const{password_hash,...utenteSicuro}=data;
+      onLogin(utenteSicuro);
+    }catch(e){setErr("Errore di connessione");}
+    finally{setLoading(false);}
+  };
+
   return(
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)"}}>
       <div style={{width:"100%",maxWidth:380,padding:"0 1.25rem"}}>
         <div style={{textAlign:"center",marginBottom:"2rem"}}>
           <div style={{width:52,height:52,background:"linear-gradient(135deg,var(--gold),var(--gld2))",borderRadius:14,display:"inline-flex",alignItems:"center",justifyContent:"center",fontFamily:"'Playfair Display',serif",fontSize:"1.5rem",fontWeight:700,color:"#0d1117",marginBottom:"1rem"}}>§</div>
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:"1.5rem",fontWeight:700,marginBottom:".25rem"}}>FiscoSim</div>
-          <div style={{fontSize:".78rem",color:"var(--mu)"}}>Studio Envisioning · Seleziona utente</div>
+          <div style={{fontSize:".78rem",color:"var(--mu)"}}>Studio Envisioning · Accesso riservato</div>
         </div>
-        {err&&<div className="alert alert-err" style={{marginBottom:".75rem"}}>⚠️ {err}</div>}
-        {utenti.length===0?(
-          <div className="alert alert-warn">Nessun utente trovato. Aggiungi utenti dalla sezione Utenti Studio.</div>
-        ):(
-          <div style={{display:"flex",flexDirection:"column",gap:".5rem"}}>
-            {utenti.map(u=>(
-              <div key={u.id} onClick={()=>onLogin(u)}
-                style={{background:"var(--s1)",border:"1px solid var(--bd)",borderRadius:12,padding:".85rem 1rem",cursor:"pointer",display:"flex",alignItems:"center",gap:".75rem",transition:"all .15s"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor="var(--gold)";e.currentTarget.style.background="rgba(200,164,94,.06)";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor="var(--bd)";e.currentTarget.style.background="var(--s1)";}}>
-                <div style={{width:36,height:36,borderRadius:"50%",background:"linear-gradient(135deg,var(--gold),var(--gld2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:".85rem",fontWeight:700,color:"#0d1117",flexShrink:0}}>
-                  {u.nome.charAt(0)}{u.cognome?.charAt(0)||""}
-                </div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,fontSize:".88rem"}}>{u.nome} {u.cognome||""}</div>
-                  <div style={{fontSize:".7rem",color:"var(--mu)"}}>{u.email}</div>
-                </div>
-                <span className={"bdg "+(RUOLI_INFO[u.ruolo]?.color||"bdg-gray")}>{RUOLI_INFO[u.ruolo]?.label||u.ruolo}</span>
-              </div>
-            ))}
+        <form onSubmit={handleLogin}>
+          <div className="fg" style={{marginBottom:".75rem"}}>
+            <label>Email</label>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="nome@studio.it" autoComplete="email" autoFocus/>
           </div>
-        )}
-        <div style={{fontSize:".65rem",color:"var(--mu)",textAlign:"center",marginTop:"1.5rem"}}>FiscoSim v3.0 · Studio Envisioning Srl</div>
+          <div className="fg" style={{marginBottom:".75rem"}}>
+            <label>Password</label>
+            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password"/>
+          </div>
+          {err&&<div className="alert alert-err" style={{marginBottom:".75rem"}}>⚠️ {err}</div>}
+          <button type="submit" className="btn full" disabled={loading} style={{marginTop:".5rem"}}>
+            {loading?"⏳ Accesso...":"🔐 Accedi"}
+          </button>
+        </form>
+        <div style={{fontSize:".65rem",color:"var(--mu)",textAlign:"center",marginTop:"1.5rem"}}>FiscoSim v3.0 · Studio Envisioning Srl<br/>Accesso solo per utenti autorizzati</div>
       </div>
     </div>
   );
