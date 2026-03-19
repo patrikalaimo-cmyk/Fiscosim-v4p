@@ -1,0 +1,13 @@
+{
+  "name": "fiscosim-pwa",
+  "version": "3.0.0",
+  "description": "FiscoSim – Gestionale Studio Commercialisti",
+  "dependencies": {
+    "nodemailer": "^6.9.13",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

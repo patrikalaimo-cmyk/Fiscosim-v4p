@@ -1,0 +1,51 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/send-email.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/split-cu.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "manifest.json",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "sw.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "icons/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/claude-proxy.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/send-email",
+      "dest": "/api/send-email.js"
+    },
+    {
+      "src": "/api/split-cu",
+      "dest": "/api/split-cu.js"
+    },
+    {
+      "src": "/api/claude",
+      "dest": "/api/claude-proxy.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}
